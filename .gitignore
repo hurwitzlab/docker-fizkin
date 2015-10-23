@@ -18,3 +18,9 @@ nytprof.out
 *.o
 *.bs
 /_eumm/
+bin/
+share/
+lib/
+include/
+*.swp
+man/
