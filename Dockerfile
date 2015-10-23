@@ -16,19 +16,16 @@ COPY scripts /usr/local/bin/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-#RUN curl -L http://cpanmin.us | perl - App::cpanminus
+RUN curl -L http://cpanmin.us | perl - App::cpanminus
 
-#RUN cpanm Carton
+RUN cpanm Carton
+
+RUN carton install 
 
 #WORKDIR /usr/local/bin
-
 #RUN pwd
-
-#RUN carton install --deployment
-
 #RUN perl Makefile.PL 
 #RUN cpanm --installdeps .
-
-ENV PERL5LIB=/usr/local/lib/perl5
+#ENV PERL5LIB=/usr/local/lib/perl5
 
 CMD "run-fizkin.pl"

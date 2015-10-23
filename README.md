@@ -1,4 +1,4 @@
-# Docker Fizink
+# Docker Fizkin
 
 Build or grab Jellyfish binaries:
 

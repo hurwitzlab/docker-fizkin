@@ -260,14 +260,30 @@ sub pairwise_cmp {
     printf "Will perform %s comparisons\n", scalar(@combos);
 
     my $combo_num = 0;
+    COMBO:
     for my $pair (@combos) {
         my ($jf_file, $kmer_file) = @$pair;
         my $base_kmer = basename($kmer_file, '.jf');
         $kmer_file   = catfile($kmer_dir,  $base_kmer . '.kmer');
         my $loc_file = catfile($kmer_dir, $base_kmer . '.loc');
+        my $sample_mode_dir = catdir($mode_dir, basename($jf_file, '.jf'));
 
-        printf "%5d: %s -> %s\n", ++$combo_num, 
+        unless (-d $sample_mode_dir) {
+            make_path($sample_mode_dir);
+        }
+
+        my $mode_file = catfile($sample_mode_dir, $base_kmer);
+
+        printf "%5d: %s -> %s", ++$combo_num, 
             basename($jf_file), basename($kmer_file);
+
+        if (-s $mode_file) {
+            say " mode file exists";
+            next COMBO;
+        }
+        else {
+            say '';
+        }
 
         my ($tmp_fh, $jf_query_out_file) = tempfile(DIR => $tmp_dir);
         close $tmp_fh;
@@ -275,15 +291,9 @@ sub pairwise_cmp {
         sys_exec('jellyfish', 'query', '-s', $kmer_file, 
             '-o', $jf_query_out_file, $jf_file);
 
-        my $sample_mode_dir = catdir($mode_dir, basename($jf_file, '.jf'));
-
-        unless (-d $sample_mode_dir) {
-            make_path($sample_mode_dir);
-        }
-
-        open my $jf_fh  , '<', $jf_query_out_file;
         open my $loc_fh , '<', $loc_file;
-        open my $mode_fh, '>', catfile($sample_mode_dir, $base_kmer);
+        open my $mode_fh, '>', $mode_file;
+        open my $jf_fh  , '<', $jf_query_out_file;
 
         while (my $loc = <$loc_fh>) {
             chomp($loc);
