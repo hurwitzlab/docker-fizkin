@@ -24,3 +24,6 @@ lib/
 include/
 *.swp
 man/
+vendor/
+cpanfile.snapshot
+local/

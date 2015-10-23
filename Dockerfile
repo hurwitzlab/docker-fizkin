@@ -2,18 +2,33 @@ FROM perl:latest
 
 MAINTAINER Ken Youens-Clark <kyclark@email.arizona.edu>
 
-COPY bin /usr/local/bin/
+COPY local /usr/local/
 
 COPY scripts /usr/local/bin/
 
-COPY include /usr/local/include/
+#COPY bin /usr/local/bin/
 
-COPY lib /usr/local/lib/
+#COPY include /usr/local/include/
 
-COPY share /usr/local/share/
+#COPY lib /usr/local/lib/
+
+#COPY share /usr/local/share/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-ENV PERL5LIB=/usr/local/lib
+#RUN curl -L http://cpanmin.us | perl - App::cpanminus
 
-CMD "run-fizkin"
+#RUN cpanm Carton
+
+#WORKDIR /usr/local/bin
+
+#RUN pwd
+
+#RUN carton install --deployment
+
+#RUN perl Makefile.PL 
+#RUN cpanm --installdeps .
+
+ENV PERL5LIB=/usr/local/lib/perl5
+
+CMD "run-fizkin.pl"
