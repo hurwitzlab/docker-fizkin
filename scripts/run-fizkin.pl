@@ -7,7 +7,7 @@ use autodie;
 use Algorithm::Numerical::Sample 'sample';
 use Bio::SeqIO;
 use Data::Dump 'dump';
-use File::Basename 'basename';
+use File::Basename qw'dirname basename';
 use File::Copy;
 use File::Find::Rule;
 use File::Path 'make_path';
@@ -56,7 +56,7 @@ sub main {
         $DEBUG = 1;
     }
 
-    go(\%args);
+    run(\%args);
 }
 
 # --------------------------------------------------
@@ -68,11 +68,25 @@ sub debug {
 
 # --------------------------------------------------
 sub get_args {
-    my %args;
+    my %args = (
+        kmer_size   => 20,
+        mode_min    => 1,    
+        num_threads => 12,
+        hash_size   => '100M',
+        max_seqs    => 300_000,
+        max_samples => 15,
+    );
+
     GetOptions(
         \%args,
         'in_dir=s',
         'out_dir=s',
+        'kmer_size:i',
+        'mode_min:i',
+        'num_threads:i',
+        'hash_size:s',
+        'max_seqs:i',
+        'max_samples:i',
         'help',
         'man',
     ) or pod2usage(2);
@@ -94,7 +108,7 @@ sub sys_exec {
 }
 
 # --------------------------------------------------
-sub go {
+sub run {
     my $args = shift;
 
     say "Subsetting";
@@ -108,6 +122,9 @@ sub go {
 
     say "Pairwise comp";
     pairwise_cmp($args);
+
+    say "Matrix";
+    make_matrix($args);
 }
 
 # --------------------------------------------------
@@ -120,9 +137,9 @@ sub jellyfish_index {
         make_path($jf_idx_dir);
     }
 
-    my $mer_size  = '20';
-    my $hash_size = '100M';
-    my $threads   = '12';
+    my $mer_size  = $args->{'kmer_size'};
+    my $hash_size = $args->{'hash_size'};
+    my $threads   = $args->{'num_threads'};
 
     my @files = File::Find::Rule->file()->in($subset_dir);
 
@@ -161,7 +178,7 @@ sub kmerize {
         make_path($kmer_dir);
     }
 
-    my $mer_size = '20';
+    my $mer_size = $args->{'kmer_size'};
     my @files    = File::Find::Rule->file()->in($subset_dir);
 
     printf "Found %s files in %s\n", scalar(@files), $subset_dir;
@@ -205,12 +222,77 @@ sub kmerize {
 }
 
 # --------------------------------------------------
-sub pairwise_cmp {
+sub make_matrix {
     my $args       = shift;
-    my $jf_idx_dir = catdir($args->{'out_dir'}, 'jf');
-    my $kmer_dir   = catdir($args->{'out_dir'}, 'kmer');
     my $mode_dir   = catdir($args->{'out_dir'}, 'mode');
-    my $tmp_dir    = catdir($args->{'out_dir'}, 'tmp');
+    my $matrix_dir = catdir($args->{'out_dir'}, 'matrix');
+
+    unless (-d $mode_dir) {
+        die "Bad mode dir ($mode_dir)";
+    }
+
+    unless (-d $matrix_dir) {
+        make_path($matrix_dir);
+    }
+
+    my @files = File::Find::Rule->file()->in($mode_dir);
+
+    unless (@files) {
+        die "Cannot find any mode files in '$mode_dir'\n";
+    }
+
+    printf "Found %s mode files\n", scalar(@files);
+
+    my %matrix;
+    for my $file (@files) {
+        open my $fh, '<', $file;
+        chomp(my $n = <$fh>);
+        close $fh;
+
+        my $sample1 = basename(dirname($file));
+        my $sample2 = basename($file);
+
+        for ($sample1, $sample2) {
+            $_ =~ s/\.\w+$//; # remove file extension
+        }
+
+        $matrix{ $sample1 }{ $sample2 } += $n || 0;
+    }
+
+#    my $num_samples = scalar(keys %matrix);
+#    for my $sample (keys %matrix) {
+#        if ($num_samples != values $matrix{ $sample }) {
+#            say "Deleting $sample";
+#            delete $matrix{ $sample };
+#        }
+#    }
+
+    my @keys     = keys %matrix;
+    my @all_keys = sort(uniq(@keys, map { keys %{ $matrix{ $_ } } } @keys));
+
+    open my $fh, '>', catfile($matrix_dir, 'matrix.tab');
+
+    say $fh join "\t", '', @all_keys;
+    for my $sample1 (@all_keys) {
+        my @vals = map { $matrix{ $sample1 }{ $_ } || 0 } @all_keys;
+
+        say $fh join "\t", 
+            $sample1, 
+            #map { sprintf('%.2f', $_ > 0 ? log($_) : 0) } @vals,
+            map { sprintf('%.2f', $_ > 0 ? log($_) : 1) } @vals,
+        ;
+    }
+}
+
+# --------------------------------------------------
+sub pairwise_cmp {
+    my $args          = shift;
+    my $mode_min      = $args->{'mode_min'};
+    my $jf_idx_dir    = catdir( $args->{'out_dir'}, 'jf' );
+    my $kmer_dir      = catdir( $args->{'out_dir'}, 'kmer' );
+    my $read_mode_dir = catdir( $args->{'out_dir'}, 'read_mode' );
+    my $mode_dir      = catdir( $args->{'out_dir'}, 'mode' );
+    my $tmp_dir       = catdir( $args->{'out_dir'}, 'tmp' );
 
     unless (-d $jf_idx_dir) {
         die "Bad Jellyfish index dir ($jf_idx_dir)";
@@ -220,7 +302,7 @@ sub pairwise_cmp {
         die "Bad kmer dir ($kmer_dir)";
     }
 
-    for my $dir ($tmp_dir, $mode_dir) {
+    for my $dir ($tmp_dir, $mode_dir, $read_mode_dir) {
         make_path($dir) unless -d $dir;
     }
 
@@ -250,32 +332,32 @@ sub pairwise_cmp {
         return;
     }
 
-    my $max = 15;
-    if ($num_jf_files > $max) {
-        say "Subsetting to $max files";
-        @jf_files = sample(-set => \@jf_files, -sample_size => $max);
+    my @combos;
+    for my $pair (combine(2, @jf_files)) {
+        my ($s1, $s2) = @$pair;
+        push @combos, [$s1, $s2], [$s2, $s1];
     }
 
-    my @combos = combine(2, @jf_files);
     printf "Will perform %s comparisons\n", scalar(@combos);
 
     my $combo_num = 0;
     COMBO:
     for my $pair (@combos) {
-        my ($jf_file, $kmer_file) = @$pair;
-        my $base_kmer = basename($kmer_file, '.jf');
-        $kmer_file   = catfile($kmer_dir,  $base_kmer . '.kmer');
-        my $loc_file = catfile($kmer_dir, $base_kmer . '.loc');
-        my $sample_mode_dir = catdir($mode_dir, basename($jf_file, '.jf'));
+        my ($s1, $s2)       = @$pair;
+        my $base_jf_file    = basename($s1, '.jf');
+        my $base_kmer_file  = basename($s2, '.jf');
+        my $kmer_file       = catfile($kmer_dir,  $base_kmer_file . '.kmer');
+        my $loc_file        = catfile($kmer_dir, $base_kmer_file . '.loc');
+        my $sample_mode_dir = catdir($mode_dir, $base_jf_file);
+        my $sample_read_dir = catdir($read_mode_dir, $base_jf_file);
+        my $mode_file       = catfile($sample_mode_dir, $base_kmer_file);
+        my $read_mode_file  = catfile($sample_read_dir, $base_kmer_file);
 
-        unless (-d $sample_mode_dir) {
-            make_path($sample_mode_dir);
+        for my $dir ($sample_mode_dir, $sample_read_dir) {
+            make_path($dir) unless -d $dir;
         }
 
-        my $mode_file = catfile($sample_mode_dir, $base_kmer);
-
-        printf "%5d: %s -> %s", ++$combo_num, 
-            basename($jf_file), basename($kmer_file);
+        printf "%5d: %s -> %s", ++$combo_num, $base_kmer_file, $base_jf_file;
 
         if (-s $mode_file) {
             say " mode file exists";
@@ -289,12 +371,14 @@ sub pairwise_cmp {
         close $tmp_fh;
 
         sys_exec('jellyfish', 'query', '-s', $kmer_file, 
-            '-o', $jf_query_out_file, $jf_file);
+            '-o', $jf_query_out_file, $s1);
 
-        open my $loc_fh , '<', $loc_file;
-        open my $mode_fh, '>', $mode_file;
-        open my $jf_fh  , '<', $jf_query_out_file;
+        open my $loc_fh ,      '<', $loc_file;
+        open my $mode_fh,      '>', $mode_file;
+        open my $read_mode_fh, '>', $read_mode_file;
+        open my $jf_fh,        '<', $jf_query_out_file;
 
+        my $mode_count = 0;
         while (my $loc = <$loc_fh>) {
             chomp($loc);
             my ($read_id, $n_kmers) = split /\t/, $loc;
@@ -306,10 +390,14 @@ sub pairwise_cmp {
                 push @counts, $count if defined $count && $count =~ /^\d+$/;
             }
 
-            if (my $mode = mode(@counts)) {
-                print $mode_fh join("\t", $read_id, $mode), "\n";
+            my $mode = mode(@counts) // 0;
+            if ($mode >= $mode_min) {
+                print $read_mode_fh join("\t", $read_id, $mode), "\n";
+                $mode_count++;
             }
         }
+
+        say $mode_fh $mode_count;
 
         unlink $jf_query_out_file;
     }
@@ -317,10 +405,19 @@ sub pairwise_cmp {
 
 # --------------------------------------------------
 sub subset_files {
-    my $args = shift;
-    my @files = File::Find::Rule->file()->in($args->{'in_dir'});
+    my $args        = shift;
+    my $max_seqs    = $args->{'max_seqs'};
+    my $max_samples = $args->{'max_samples'};
+    my @files       = File::Find::Rule->file()->in($args->{'in_dir'});
 
     printf "Found %s files in %s\n", scalar(@files), $args->{'in_dir'};
+
+    if (scalar(@files) > $max_samples) {
+        say "Subsetting to $max_samples files";
+        @files = sample(-set => \@files, -sample_size => $max_samples);
+    }
+
+    $args->{'files'} = \@files;
 
     my $subset_dir = catdir($args->{'out_dir'}, 'subset');
     unless (-d $subset_dir) {
@@ -351,8 +448,7 @@ sub subset_files {
 
         print "$count seqs, ";
 
-        my $max = 300_000;
-        if ($count < $max) {
+        if ($count < $max_seqs) {
             say "copying to subset file";
             copy($file, $subset_file); 
         }
@@ -365,7 +461,7 @@ sub subset_files {
             ); 
 
             my %take;
-            while (scalar(keys %take) < $max) {
+            while (scalar(keys %take) < $max_seqs) {
                 my $id = $random->next;
                 $take{ $id }++;
             }
@@ -455,12 +551,21 @@ run-fizkin - run fizkin
 
   run-fizkin -i input-dir -o output-dir
 
-Options:
+Required arguments:
 
   --input_dir   Input directory (FASTA)
   --output_dir  Output directory (FASTA)
-  --help        Show brief help and exit
-  --man         Show full documentation
+
+Options (defaults in parentheses):
+ 
+  --kmer_size    Kmer size (20)
+  --mode_min     Minimum mode to take a sequence (1)
+  --num_threads  Number of threads to use for Jellyfish (12)
+  --hash_size    Size of hash for Jellyfish (100M)
+  --max_seqs     Maximum number of sequences per input file (300,000)
+  --max_samples  Maximum number of samples (15)
+  --help         Show brief help and exit
+  --man          Show full documentation
 
 =head1 DESCRIPTION
 
