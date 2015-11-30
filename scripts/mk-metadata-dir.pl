@@ -35,6 +35,8 @@ sub main {
     my %fhs;
     for my $fld (@flds) {
         open $fhs{ $fld }, '>', catfile($out_dir, $fld);
+        (my $base = $fld) =~ s/\..+$//; # remove suffix
+        say { $fhs{ $fld } } join "\t", 'Sample', split(/_/, $base);
     }
 
     REC:

@@ -289,7 +289,18 @@ sub make_metadata_dir {
         die "Bad metadata file ($in_file)\n";
     }
 
-    unless (-d $meta_dir) {
+    if (-d $meta_dir) {
+        if (
+            my @previous = File::Find::Rule->file()->name(qr/\.(d|c|ll)$/)->in($meta_dir)
+        ) {
+            my $n = scalar(@previous);
+            debug(sprintf("Removing %s previous metadata file%s", 
+                $n, $n == 1 ? '' : 's'
+            ));
+            unlink @previous;
+        }
+    }
+    else {
         make_path($meta_dir);
     }
 
@@ -615,7 +626,7 @@ sub timer_calc {
 sub sna {
     my $args         = shift;
     my $out_dir      = $args->{'out_dir'}      or die "No out_dir\n";
-    my $metadir      = $args->{'metadata_dir'} or die "No metadata_ dir\n";
+    my $metadir      = $args->{'metadata_dir'} or die "No metadata_dir\n";
     my $seq_matrix   = $args->{'matrix_file'}  or die "No matrix\n";
     my $euc_dist_per = $args->{'ecudistper'} || 0.10;
     my $r_bin        = $args->{'r_bin'}      || which('R');
@@ -1434,13 +1445,13 @@ Xss<-array(NA, dim=c(n,n,k))
 [% SET counter=counter + 1 -%]
 gbme(Y=Y, Xss, fam="gaussian", k=2, direct=F, NS=NS, odens=odens)
 
-x.names <- c("[% meta_names.join('", "')%]", "intercept")
+#x.names <- c("[% meta_names.join('", "')%]", "intercept")
 
-OUT <- read.table("OUT", header=T)
-full.model <- t(apply(OUT, 2, quantile, c(0.5, 0.025, 0.975)))
-rownames(full.model)[1:[% counter %]] <- x.names
-table1 <- xtable(full.model[1:[% counter %]], align="c|c||cc")
-print ( xtable (table1), type= "latex" , file= "table1.tex" )
+#OUT <- read.table("OUT", header=T)
+#full.model <- t(apply(OUT, 2, quantile, c(0.5, 0.025, 0.975)))
+#rownames(full.model)[1:[% counter %]] <- x.names
+#table1 <- xtable(full.model[1:[% counter %]], align="c|c||cc")
+#print ( xtable (table1), type= "latex" , file= "table1.tex" )
 EOF
 }
 
@@ -1760,7 +1771,7 @@ sub continuous_metadata_matrix {
         }
     }
 
-    my @sorted = sort @all_eucledean;
+    my @sorted = sort { $a <=> $b } @all_eucledean;
     my $count  = @sorted;
 
     #print "count $count";
@@ -1769,8 +1780,6 @@ sub continuous_metadata_matrix {
     #print "bottom $bottom_per\n";
     my $max_value      = $sorted[$bottom_per];
     my $smallest_value = $sorted[0];
-
-    #print "max euc dist: $max_value\n";
 
     for my $id (sort @samples) {
         my (@pw_dist, @eucledean_dist);
@@ -1813,7 +1822,6 @@ sub continuous_metadata_matrix {
         # far = 0
         for my $euc_dist (@eucledean_dist) {
             my $val = ($euc_dist < $max_value) && ($euc_dist > 0) ? 1 : 0;
-            say "euc_dist ($euc_dist), max ($max_value), val ($val)";
             push @pw_dist, $val;
         }
 

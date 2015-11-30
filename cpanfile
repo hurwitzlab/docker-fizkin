@@ -6,6 +6,7 @@ requires 'File::Basename';
 requires 'File::CountLines';
 requires 'File::Find::Rule';
 requires 'File::RandomLine';
+requires 'File::Which';
 requires 'List::Util';
 requires 'List::MoreUtils';
 requires 'Math::Combinatorics';
