@@ -34,7 +34,7 @@ use File::Temp qw'tempdir tempfile';
 use File::Which 'which';
 use Getopt::Long;
 use List::MoreUtils qw'uniq';
-use List::Util 'max';
+use List::Util qw'max sum';
 use Math::Combinatorics 'combine';
 use Pod::Usage;
 use Readonly;
@@ -45,6 +45,7 @@ use Time::HiRes qw( gettimeofday tv_interval );
 use Time::Interval qw( parseInterval );
 
 our $DEBUG = 0;
+our $META_PCT_UNIQ = 80;
 
 # --------------------------------------------------
 sub run {
@@ -291,7 +292,8 @@ sub make_metadata_dir {
 
     if (-d $meta_dir) {
         if (
-            my @previous = File::Find::Rule->file()->name(qr/\.(d|c|ll)$/)->in($meta_dir)
+            my @previous = 
+              File::Find::Rule->file()->name(qr/\.(d|c|ll)$/)->in($meta_dir)
         ) {
             my $n = scalar(@previous);
             debug(sprintf("Removing %s previous metadata file%s", 
@@ -1445,13 +1447,13 @@ Xss<-array(NA, dim=c(n,n,k))
 [% SET counter=counter + 1 -%]
 gbme(Y=Y, Xss, fam="gaussian", k=2, direct=F, NS=NS, odens=odens)
 
-#x.names <- c("[% meta_names.join('", "')%]", "intercept")
+x.names <- c("[% meta_names.join('", "')%]", "intercept")
 
-#OUT <- read.table("OUT", header=T)
-#full.model <- t(apply(OUT, 2, quantile, c(0.5, 0.025, 0.975)))
-#rownames(full.model)[1:[% counter %]] <- x.names
-#table1 <- xtable(full.model[1:[% counter %]], align="c|c||cc")
-#print ( xtable (table1), type= "latex" , file= "table1.tex" )
+OUT <- read.table("OUT", header=T)
+full.model <- t(apply(OUT, 2, quantile, c(0.5, 0.025, 0.975)))
+rownames(full.model)[1:[% counter %]] <- x.names
+table1 <- xtable(full.model[1:[% counter %]], align="c|c||cc")
+print ( xtable (table1), type= "latex" , file= "table1.tex" )
 EOF
 }
 
@@ -1587,6 +1589,7 @@ sub distance_metadata_matrix {
     # approximate radius of earth in km
     #my $r = 6373.0;
 
+    my %check;
     for my $id (sort @samples) {
         my @dist = ();
         for my $s (@samples) {
@@ -1624,10 +1627,46 @@ sub distance_metadata_matrix {
 
         }
 
+        my $tmp = join('', @dist);
+        $check{ $tmp }++;
         say $OUT join "\t", $id, @dist;
     }
 
-    return $out_file;
+    if (meta_dist_ok(\%check)) {
+        return $out_file;
+    }
+    else {
+        debug("EXCLUDE");
+        return undef;
+    }
+
+#    my $n_uniq    = keys(%check);
+#    my $n_samples = scalar(@samples);
+#    my $pct_uniq  = sprintf('%.02f', ($n_uniq / $n_samples) * 100);
+#
+#    if ($pct_uniq >= $META_PCT_UNIQ) {
+#        return $out_file;
+#    }
+#    else {
+#        debug("EXCLUDE");
+#        return undef;
+#    }
+}
+
+# --------------------------------------------------
+sub meta_dist_ok {
+    my $dist      = shift;
+    my @keys      = keys(%$dist);
+    my $n_keys    = scalar(@keys);
+    my $n_samples = sum(values(%$dist));
+    my @dists     = map { sprintf('%.02f', ($dist->{$_} / $n_samples) * 100) }
+                    @keys;
+
+    debug("dists = ", join(', ', @dists));
+
+    my @not_ok = grep { $_ >= $META_PCT_UNIQ } @dists;
+
+    return @not_ok == 0;
 }
 
 # --------------------------------------------------
@@ -1780,7 +1819,7 @@ sub continuous_metadata_matrix {
     #print "bottom $bottom_per\n";
     my $max_value      = $sorted[$bottom_per];
     my $smallest_value = $sorted[0];
-
+    my %check;
     for my $id (sort @samples) {
         my (@pw_dist, @eucledean_dist);
 
@@ -1825,10 +1864,30 @@ sub continuous_metadata_matrix {
             push @pw_dist, $val;
         }
 
+        my $tmp = join('', @pw_dist);
+        $check{ $tmp }++;
         say $OUT join "\t", $id, @pw_dist;
     }
 
-    return $out_file;
+    my $n_uniq    = keys(%check);
+    my $n_samples = scalar(@samples);
+    my $pct_uniq  = sprintf('%.02f', ($n_uniq / $n_samples) * 100);
+
+    if (meta_dist_ok(\%check)) {
+        return $out_file;
+    }
+    else {
+        debug("EXCLUDE");
+        return undef;
+    }
+
+#    if ($pct_uniq >= $META_PCT_UNIQ) {
+#        return $out_file;
+#    }
+#    else {
+#        debug("EXCLUDE");
+#        return undef;
+#    }
 }
 
 # --------------------------------------------------
@@ -1836,7 +1895,8 @@ sub discrete_metadata_matrix {
     #
     # This routine creates the metadata matrix based on discrete data values 
     #
-    # in_file contains sample, metadata (discrete values) e.g. longhurst province
+    # in_file contains sample, metadata (discrete values) 
+    # e.g. longhurst province
     # where 0 = different, and 1 = the same
 
     my ($in_file, $out_dir) = @_;
@@ -1876,6 +1936,7 @@ sub discrete_metadata_matrix {
     open my $OUT, ">", $out_file;
     say $OUT join "\t", '', @samples;
 
+    my %check;
     for my $id (sort @samples) {
         my @same_diff = ();
         for my $s (@samples) {
@@ -1908,12 +1969,32 @@ sub discrete_metadata_matrix {
             }
         }
 
+        my $tmp = join '', @same_diff;
+        $check{ $tmp }++;
         say $OUT join "\t", $id, @same_diff;
     }
 
     close $OUT;
 
-    return $out_file;
+    my $n_uniq    = keys(%check);
+    my $n_samples = scalar(@samples);
+    my $pct_uniq  = sprintf('%.02f', ($n_uniq / $n_samples) * 100);
+
+    if (meta_dist_ok(\%check)) {
+        return $out_file;
+    }
+    else {
+        debug("EXCLUDE");
+        return undef;
+    }
+
+#    if ($pct_uniq >= $META_PCT_UNIQ) {
+#        return $out_file;
+#    }
+#    else {
+#        debug("EXCLUDE");
+#        return undef;
+#    }
 }
 
 # --------------------------------------------------
