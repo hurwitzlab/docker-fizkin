@@ -29,7 +29,7 @@ use File::Copy;
 use File::Find::Rule;
 use File::Path 'make_path';
 use File::RandomLine;
-use File::Spec::Functions;
+use File::Spec::Functions qw'catfile catdir file_name_is_absolute';
 use File::Temp qw'tempdir tempfile';
 use File::Which 'which';
 use Getopt::Long;
@@ -46,10 +46,52 @@ use Time::Interval qw( parseInterval );
 
 our $DEBUG = 0;
 our $META_PCT_UNIQ = 80;
+Readonly my %DEFAULT => (
+    hash_size   => '100M',
+    kmer_size   => 20,
+    max_samples => 15,
+    max_seqs    => 300_000,
+    mode_min    => 1,    
+    num_threads => 12,
+);
 
 # --------------------------------------------------
 sub run {
     my $args = shift;
+    
+    unless ($args->{'metadata'}) {
+        die "No metadata file\n";
+    }
+
+    unless (-s $args->{'metadata'}) {
+        die "Bad metadata file ($args->{'metadata'})\n";
+    }
+
+    unless ($args->{'in_dir'}) {
+        die "No input directory\n";
+    }
+
+    unless ($args->{'out_dir'}) {
+        die "No output directory\n";
+    }
+
+    unless (-d $args->{'in_dir'}) {
+        die "Bad input dir ($args->{'in_dir'})";
+    }
+
+    unless (-d $args->{'out_dir'}) {
+        make_path($args->{'out_dir'});    
+    }
+
+    if ($args->{'debug'}) {
+        $DEBUG = 1;
+    }
+
+    $args->{'out_dir'} = realpath($args->{'out_dir'});
+
+    while (my ($key, $val) = each %DEFAULT) {
+        $args->{ $key } ||= $val;
+    }
 
     say "Subsetting";
     subset_files($args);
@@ -71,6 +113,8 @@ sub run {
 
     say "SNA";
     sna($args);
+
+    printf "Done, see '%s' for output.\n", $args->{'sna_dir'};
 }
 
 # --------------------------------------------------
@@ -87,7 +131,7 @@ sub sys_exec {
     debug("exec = ", join(' ', @args));
 
     unless (system(@args) == 0) {
-        die sprintf("Cannot execute %s: %s", join(' ', @args), $?);
+        die sprintf("Failed to execute %s", join(' ', @args));
     }
 
     return 1;
@@ -116,17 +160,14 @@ sub jellyfish_index {
     for my $file_name (@file_names) {
         printf "%5d: %-${longest}s ", ++$file_num, $file_name;
 
-        my $fasta_file = catfile($subset_dir, $file_name);
-        my $jf_file    = catfile($jf_idx_dir, $file_name);
-
-        for my $file ($fasta_file, $jf_file) {
-            die "Bad file ($file)\n" unless -e $file;
-        }
+        my $jf_file = catfile($jf_idx_dir, $file_name);
 
         if (-e $jf_file) {
             say "index exists";
         }
         else {
+            my $fasta_file = catfile($subset_dir, $file_name);
+            die "Bad FASTA file ($fasta_file)\n" unless -e $fasta_file;
             say "indexing, ";
             my $timer = timer_calc();
             sys_exec('jellyfish', 'count', 
@@ -306,6 +347,7 @@ sub make_metadata_dir {
         make_path($meta_dir);
     }
 
+    debug("metadata file ($in_file)");
     debug("metadata_dir ($meta_dir)");
 
     my $p    = Text::RecordParser::Tab->new($in_file);
@@ -487,6 +529,7 @@ sub subset_files {
     FILE:
     for my $file (@files) {
         my $basename    = basename($file);
+        my $file_path   = catfile($in_dir, $file);
         my $subset_file = catfile($subset_dir, $basename);
 
         printf "%5d: %-${longest}s ", ++$file_num, $basename;
@@ -497,7 +540,7 @@ sub subset_files {
         }
 
         my ($tmp_fh, $tmp_filename) = tempfile();
-        my $fa = Bio::SeqIO->new(-file => $file);
+        my $fa = Bio::SeqIO->new(-file => $file_path);
         my $count = 0;
         while (my $seq = $fa->next_seq) {
             $count++;
@@ -509,7 +552,7 @@ sub subset_files {
 
         if ($count < $max_seqs) {
             say "copying to subset file";
-            copy($file, $subset_file); 
+            copy($file_path, $subset_file); 
         }
         else {
             say "randomly sampling, ";
@@ -526,7 +569,7 @@ sub subset_files {
                 $take{ $id }++;
             }
 
-            my $in = Bio::SeqIO->new(-file => $file);
+            my $in = Bio::SeqIO->new(-file => $file_path);
             my $out= Bio::SeqIO->new( 
                 -format => 'Fasta', 
                 -file => ">$subset_file"
@@ -639,8 +682,15 @@ sub sna {
         or die "Found no d/c/ll files in ($metadir)\n";
 
     $out_dir = catdir(realpath($out_dir), 'sna');
+
+    $args->{'sna_dir'} = $out_dir;
+
     unless (-d $out_dir) {
         make_path($out_dir);
+    }
+
+    unless (-e $seq_matrix) {
+        die "Bad matrix file ($seq_matrix)\n";
     }
 
     # step 1 create the metadata tables for the analysis
@@ -1452,7 +1502,7 @@ x.names <- c("[% meta_names.join('", "')%]", "intercept")
 OUT <- read.table("OUT", header=T)
 full.model <- t(apply(OUT, 2, quantile, c(0.5, 0.025, 0.975)))
 rownames(full.model)[1:[% counter %]] <- x.names
-table1 <- xtable(full.model[1:[% counter %]], align="c|c||cc")
+table1 <- xtable(full.model[1:[% counter %],], align="c|c||cc")
 print ( xtable (table1), type= "latex" , file= "table1.tex" )
 EOF
 }
@@ -1639,24 +1689,16 @@ sub distance_metadata_matrix {
         debug("EXCLUDE");
         return undef;
     }
-
-#    my $n_uniq    = keys(%check);
-#    my $n_samples = scalar(@samples);
-#    my $pct_uniq  = sprintf('%.02f', ($n_uniq / $n_samples) * 100);
-#
-#    if ($pct_uniq >= $META_PCT_UNIQ) {
-#        return $out_file;
-#    }
-#    else {
-#        debug("EXCLUDE");
-#        return undef;
-#    }
 }
 
 # --------------------------------------------------
 sub meta_dist_ok {
-    my $dist      = shift;
-    my @keys      = keys(%$dist);
+    my $dist = shift;
+
+    debug("dist = ", dump($dist));
+    return unless ref($dist) eq 'HASH';
+
+    my @keys      = keys(%$dist) or return;
     my $n_keys    = scalar(@keys);
     my $n_samples = sum(values(%$dist));
     my @dists     = map { sprintf('%.02f', ($dist->{$_} / $n_samples) * 100) }
@@ -1869,10 +1911,6 @@ sub continuous_metadata_matrix {
         say $OUT join "\t", $id, @pw_dist;
     }
 
-    my $n_uniq    = keys(%check);
-    my $n_samples = scalar(@samples);
-    my $pct_uniq  = sprintf('%.02f', ($n_uniq / $n_samples) * 100);
-
     if (meta_dist_ok(\%check)) {
         return $out_file;
     }
@@ -1880,14 +1918,6 @@ sub continuous_metadata_matrix {
         debug("EXCLUDE");
         return undef;
     }
-
-#    if ($pct_uniq >= $META_PCT_UNIQ) {
-#        return $out_file;
-#    }
-#    else {
-#        debug("EXCLUDE");
-#        return undef;
-#    }
 }
 
 # --------------------------------------------------
@@ -1919,7 +1949,7 @@ sub discrete_metadata_matrix {
         else {
             my @values = split(/\t/, $_);
             my $id = shift @values;
-            push(@samples, $id);
+            push @samples, $id;
             for my $m (@meta) {
                 my $v = shift @values;
                 $sample_to_metadata{$id}{$m} = $v;
@@ -1976,10 +2006,6 @@ sub discrete_metadata_matrix {
 
     close $OUT;
 
-    my $n_uniq    = keys(%check);
-    my $n_samples = scalar(@samples);
-    my $pct_uniq  = sprintf('%.02f', ($n_uniq / $n_samples) * 100);
-
     if (meta_dist_ok(\%check)) {
         return $out_file;
     }
@@ -1987,14 +2013,6 @@ sub discrete_metadata_matrix {
         debug("EXCLUDE");
         return undef;
     }
-
-#    if ($pct_uniq >= $META_PCT_UNIQ) {
-#        return $out_file;
-#    }
-#    else {
-#        debug("EXCLUDE");
-#        return undef;
-#    }
 }
 
 # --------------------------------------------------

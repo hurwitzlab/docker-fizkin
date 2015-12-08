@@ -6,26 +6,24 @@ COPY local /usr/local/
 
 COPY scripts /usr/local/bin/
 
-#COPY bin /usr/local/bin/
+COPY scripts/Fizkin.pm /usr/local/cpan/local/lib/perl5/
 
-#COPY include /usr/local/include/
+RUN apt-get update && apt-get install r-base -y
 
-#COPY lib /usr/local/lib/
+WORKDIR /usr/local/r
 
-#COPY share /usr/local/share/
-
-ENV LD_LIBRARY_PATH=/usr/local/lib
+RUN R CMD INSTALL xtable_1.8-0.tar.gz
 
 RUN curl -L http://cpanmin.us | perl - App::cpanminus
 
 RUN cpanm Carton
 
+WORKDIR /usr/local/cpan
+
 RUN carton install 
 
-#WORKDIR /usr/local/bin
-#RUN pwd
-#RUN perl Makefile.PL 
-#RUN cpanm --installdeps .
-#ENV PERL5LIB=/usr/local/lib/perl5
+ENV PERL5LIB /usr/local/cpan/local/lib/perl5/
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
 
 CMD "run-fizkin.pl"

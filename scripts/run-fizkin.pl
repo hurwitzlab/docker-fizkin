@@ -60,14 +60,6 @@ sub main {
         pod2usage("Bad input dir ($args{'in_dir'})");
     }
 
-    unless (-d $args{'out_dir'}) {
-        make_path($args{'out_dir'});    
-    }
-
-    if ($args{'debug'}) {
-        $Fizkin::DEBUG = 1;
-    }
-
     Fizkin::run(\%args);
 
     say "Done.";
