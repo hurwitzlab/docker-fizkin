@@ -168,7 +168,7 @@ sub jellyfish_index {
         else {
             my $fasta_file = catfile($subset_dir, $file_name);
             die "Bad FASTA file ($fasta_file)\n" unless -e $fasta_file;
-            say "indexing, ";
+            print "indexing, ";
             my $timer = timer_calc();
             sys_exec('jellyfish', 'count', 
                 '-m', $mer_size, 
@@ -506,11 +506,19 @@ sub subset_files {
         @files = map { basename($_) } File::Find::Rule->file()->in($in_dir);
     }
 
-    debug("files = ", join(', ', @files));
+    debug("files = ", 
+        join("\n", map { $_ + 1 . ": " . $files[$_] } 0..$#files)
+    );
 
-    printf "Found %s files in %s\n", scalar(@files), $args->{'in_dir'};
+    my $n_files = scalar(@files);
 
-    if (scalar(@files) > $max_samples) {
+    unless ($n_files > 1) {
+        die "Need more than one file to compare.\n";
+    }
+
+    printf "Found %s files in dir '%s'\n", $n_files, $args->{'in_dir'};
+
+    if ($n_files > $max_samples) {
         say "Subsetting to $max_samples files";
         @files = sample(-set => \@files, -sample_size => $max_samples);
     }
@@ -549,15 +557,15 @@ sub subset_files {
         close $tmp_fh;
 
         print "$count seqs, ";
+        my $timer = timer_calc();
 
         if ($count < $max_seqs) {
-            say "copying to subset file";
+            print "copying to subset file";
             copy($file_path, $subset_file); 
         }
         else {
-            say "randomly sampling, ";
+            print "randomly sampling";
 
-            my $timer = timer_calc();
             my $random = File::RandomLine->new(
                 $tmp_filename, 
                 { algorithm => 'uniform' }
@@ -578,9 +586,9 @@ sub subset_files {
             while (my $seq = $in->next_seq) {
                 $out->write_seq($seq) if exists $take{ $seq->id };
             }
-
-            say "finished in ", $timer->();
         }
+
+        say ", finished in ", $timer->();
 
         unlink($tmp_filename);
     }
@@ -1780,17 +1788,17 @@ sub rad2deg {
 # --------------------------------------------------
 sub continuous_metadata_matrix {
     # 
-    # This routine creates the metadata matrix based on continuous data values 
+    # This routine creates the metadata matrix based on continuous
+    # data values in_file contains sample, metadata (continous values)
+    # e.g. temperature euclidean distance percentage = the bottom X
+    # percent when sorted low to high considered "close", default =
+    # bottom 10 percent
     #
-    # in_file contains sample, metadata (continous values) e.g. temperature
-    # euclidean distance percentage = the bottom X percent when sorted low to high
-    # considered "close", default = bottom 10 percent
 
     my ($in_file, $eucl_dist_per, $out_dir) = @_;
     open my $IN, '<', $in_file;
-    my @meta               = ();
-    my %sample_to_metadata = ();
-    my @samples;
+
+    my (@meta, %sample_to_metadata, @samples);
 
     my $i = 0;
     while (<$IN>) {
@@ -1810,6 +1818,10 @@ sub continuous_metadata_matrix {
                 $sample_to_metadata{$id}{$m} = $v;
             }
         }
+    }
+
+    unless (%sample_to_metadata) {
+        die "Failed to get any metadata from file '$in_file'\n";
     }
 
     # create a file that calculates the eucledean distance for each value in

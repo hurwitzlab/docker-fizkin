@@ -25,6 +25,8 @@ use Statistics::Descriptive::Discrete;
 use Time::HiRes qw( gettimeofday tv_interval );
 use Time::Interval qw( parseInterval );
 
+$| = 1;
+
 my $DEBUG = 0;
 
 main();
