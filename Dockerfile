@@ -26,4 +26,4 @@ ENV PERL5LIB /usr/local/cpan/local/lib/perl5/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
-CMD "run-fizkin.pl"
+ENTRYPOINT ["run-fizkin.pl"]
