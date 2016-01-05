@@ -362,17 +362,35 @@ sub make_metadata_dir {
         say { $fhs{ $fld } } join "\t", 'Sample', split(/_/, $base);
     }
 
+    #
+    # Need to ensure every sample has metadata
+    #
+    my %meta_check;
+
     REC:
     while (my $rec = $p->fetchrow_hashref) {
-        my $sample_name = $rec->{'name'};
+        my $sample_name = $rec->{'name'} or next;
         if (%names && !$names{ $sample_name }) {
             next REC;
         }
 
         for my $fld (@flds) {
+            $meta_check{ $sample_name }{ $fld }++;
+
             say {$fhs{$fld}}
                 join "\t", $sample_name, split(/\s*,\s*/, $rec->{ $fld });
         }
+    }
+
+    my @errors;
+    for my $file (@filenames) {
+        if (my @missing = grep { ! $meta_check{ $file }{ $_ } } @flds) {
+            push @errors, "$file missing meta: ", join(', ', @missing);
+        }
+    } 
+
+    if (@errors) {
+        die join "\n", "Metadata errors: ", @errors, '';
     }
 
     $args->{'metadata_dir'} = $meta_dir;
@@ -506,8 +524,8 @@ sub subset_files {
         @files = map { basename($_) } File::Find::Rule->file()->in($in_dir);
     }
 
-    debug("files = ", 
-        join("\n", map { $_ + 1 . ": " . $files[$_] } 0..$#files)
+    debug( 
+        join("\n", "files = ", map { $_ + 1 . ": " . $files[$_] } 0..$#files)
     );
 
     my $n_files = scalar(@files);
@@ -1824,9 +1842,9 @@ sub continuous_metadata_matrix {
         die "Failed to get any metadata from file '$in_file'\n";
     }
 
-    # create a file that calculates the eucledean distance for each value in
+    # create a file that calculates the euclidean distance for each value in
     # the metadata file for each pairwise combination of samples where the
-    # value gives the eucledean distance for example "nutrients" might be
+    # value gives the euclidean distance for example "nutrients" might be
     # comprised of nitrite, phosphate, silica
     my $basename = basename($in_file);
     my $out_file = catfile($out_dir, "${basename}.meta");
@@ -1834,7 +1852,7 @@ sub continuous_metadata_matrix {
     say $OUT join "\t", '', @samples;
 
     # get all euc distances to determine what is reasonably "close"
-    my @all_eucledean = ();
+    my @all_euclidean = ();
     for my $id (@samples) {
         my @pw_dist = ();
         for my $s (@samples) {
@@ -1844,14 +1862,12 @@ sub continuous_metadata_matrix {
                 push @b, $sample_to_metadata{$s}{$m};
             }
 
+            #pairwise euc dist between A and B
             my $ct  = scalar(@a) - 1;
             my $sum = 0;
-
-            #pairwise euc dist between A and B
             for my $i (0 .. $ct) {
                 if (($a[$i] ne 'NA') && ($b[$i] ne 'NA')) {
-                    my $value = ($a[$i] - $b[$i])**2;
-                    $sum = $sum + $value;
+                    $sum += ($a[$i] - $b[$i])**2;
                 }
             }
 
@@ -1859,23 +1875,35 @@ sub continuous_metadata_matrix {
             # there are no 'NA' values
             if ($sum > 0) {
                 my $euc_dist = sqrt($sum);
-                push @all_eucledean, $euc_dist;
+                push @all_euclidean, $euc_dist;
             }
         }
     }
 
-    my @sorted = sort { $a <=> $b } @all_eucledean;
-    my $count  = @sorted;
+    unless (@all_euclidean) {
+        die "Failed to get Euclidean distances.\n";
+    }
 
-    #print "count $count";
+    my @sorted     = sort { $a <=> $b } @all_euclidean;
+    my $count      = scalar(@sorted);
     my $bottom_per = $count - int($eucl_dist_per * $count);
+    my $max_value  = $bottom_per < $count ? $sorted[$bottom_per] : $sorted[-1];
+    my $min_value  = $sorted[0];
+    debug(join(', ',
+        "sorted (" . join(', ', @sorted) . ")",
+        "eucl_dist_per ($eucl_dist_per)",
+        "bottom_per ($bottom_per)", 
+        "max_value ($max_value)", 
+        "min_value ($min_value)"
+    ));
 
-    #print "bottom $bottom_per\n";
-    my $max_value      = $sorted[$bottom_per];
-    my $smallest_value = $sorted[0];
+    unless ($max_value > 0) {
+        die "Failed to get valid max value from list ", join(', ', @sorted);
+    }
+
     my %check;
     for my $id (sort @samples) {
-        my (@pw_dist, @eucledean_dist);
+        my (@pw_dist, @euclidean_dist);
 
         for my $s (@samples) {
             my (@a, @b);
@@ -1898,22 +1926,22 @@ sub continuous_metadata_matrix {
 
             if ($sum > 0) {
                 my $euc_dist = sqrt($sum);
-                push @eucledean_dist, $euc_dist;
+                push @euclidean_dist, $euc_dist;
             }
             else {
                 if ($id eq $s) {
-                    push @eucledean_dist, $smallest_value;
+                    push @euclidean_dist, $min_value;
                 }
                 else {
-                    #push @eucledean_dist, 'NA';
-                    push @eucledean_dist, 0;
+                    #push @euclidean_dist, 'NA';
+                    push @euclidean_dist, 0;
                 }
             }
         }
 
         # close = 1
         # far = 0
-        for my $euc_dist (@eucledean_dist) {
+        for my $euc_dist (@euclidean_dist) {
             my $val = ($euc_dist < $max_value) && ($euc_dist > 0) ? 1 : 0;
             push @pw_dist, $val;
         }
