@@ -215,7 +215,10 @@ sub kmerize {
             die "Cannot find FASTA file '$fasta_file'\n";
         }
 
-        my $fa = Bio::SeqIO->new(-file => $fasta_file);
+        my $fa = Bio::SeqIO->new(
+            -file   => $fasta_file,
+            -format => 'Fasta',
+        );
 
         open my $kmer_fh, '>', $kmer_file;
         open my $loc_fh,  '>', $loc_file;
@@ -566,7 +569,10 @@ sub subset_files {
         }
 
         my ($tmp_fh, $tmp_filename) = tempfile();
-        my $fa = Bio::SeqIO->new(-file => $file_path);
+        my $fa = Bio::SeqIO->new(
+            -file   => $file_path,
+            -format => 'Fasta',
+        );
         my $count = 0;
         while (my $seq = $fa->next_seq) {
             $count++;
@@ -595,10 +601,14 @@ sub subset_files {
                 $take{ $id }++;
             }
 
-            my $in = Bio::SeqIO->new(-file => $file_path);
-            my $out= Bio::SeqIO->new( 
+            my $in = Bio::SeqIO->new(
+                -file => $file_path,
                 -format => 'Fasta', 
-                -file => ">$subset_file"
+            );
+
+            my $out= Bio::SeqIO->new( 
+                -file => ">$subset_file",
+                -format => 'Fasta', 
             );
 
             while (my $seq = $in->next_seq) {
