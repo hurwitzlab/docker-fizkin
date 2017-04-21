@@ -59,11 +59,11 @@ Readonly my %DEFAULT => (
 sub run {
     my $args = shift;
     
-    unless ($args->{'metadata'}) {
-        die "No metadata file\n";
-    }
+    #unless ($args->{'metadata'}) {
+    #    die "No metadata file\n";
+    #}
 
-    unless (-s $args->{'metadata'}) {
+    if ($args->{'metadata'} && ! -s $args->{'metadata'}) {
         die "Bad metadata file ($args->{'metadata'})\n";
     }
 
@@ -279,8 +279,11 @@ sub make_matrix {
         my $avg = ($n1 + $n2)/2;
         my $log = $avg > 0 ? sprintf('%0.2f', log($avg)) : 0;
 
-        $matrix{ $s1 }{ $s2 } = $log;
-        $matrix{ $s2 }{ $s1 } = $log;
+        #$matrix{ $s1 }{ $s2 } = $log;
+        #$matrix{ $s2 }{ $s1 } = $log;
+
+        $matrix{ $s1 }{ $s2 } = $n1;
+        $matrix{ $s2 }{ $s1 } = $n2;
 
         #my $sample1 = basename(dirname($file));
         #my $sample2 = basename($file);
@@ -324,7 +327,7 @@ sub make_matrix {
 # --------------------------------------------------
 sub make_metadata_dir {
     my $args      = shift;
-    my $in_file   = $args->{'metadata'}      or die "No metadata file\n";
+    my $in_file   = $args->{'metadata'}      or return;
     my $out_dir   = $args->{'out_dir'}       or die "No outdir\n";
     my @filenames = @{$args->{'file_names'}} or die "No file names\n";
     my %names     = map { $_, 1 } @filenames;
@@ -707,15 +710,18 @@ sub timer_calc {
 sub sna {
     my $args         = shift;
     my $out_dir      = $args->{'out_dir'}      or die "No out_dir\n";
-    my $metadir      = $args->{'metadata_dir'} or die "No metadata_dir\n";
     my $seq_matrix   = $args->{'matrix_file'}  or die "No matrix\n";
-    my $euc_dist_per = $args->{'ecudistper'} || 0.10;
-    my $r_bin        = $args->{'r_bin'}      || which('R');
+    my $euc_dist_per = $args->{'ecudistper'}   || 0.10;
+    my $r_bin        = $args->{'r_bin'}        || which('Rscript');
+    my $metadir      = $args->{'metadata_dir'} || '';
     my $max_sample_distance = $args->{'sampledist'} || 1000;
 
-    my @metafiles 
-        = File::Find::Rule->file()->name(qr/\.(d|c|ll)$/)->in($metadir)
-        or die "Found no d/c/ll files in ($metadir)\n";
+    my @metafiles;
+    if ($metadir && -d $metadir) {
+        @metafiles = 
+            File::Find::Rule->file()->name(qr/\.(d|c|ll)$/)->in($metadir)
+            or die "Found no d/c/ll files in ($metadir)\n";
+    }
 
     $out_dir = catdir(realpath($out_dir), 'sna');
 
@@ -816,8 +822,8 @@ sub sna {
     close $plot_fh;
 
     # make sure you load R if you run this on the HPC
-    sys_exec("$r_bin CMD BATCH --slave $sna_r");
-    sys_exec("$r_bin CMD BATCH --slave $plot_r");
+    sys_exec("$r_bin $sna_r");
+    sys_exec("$r_bin $plot_r");
 }
 
 # --------------------------------------------------

@@ -42,11 +42,11 @@ sub main {
         });
     }
 
-    unless ($args{'metadata'}) {
-        pod2usage('No metadata file');
-    }
+    #unless ($args{'metadata'}) {
+    #    pod2usage('No metadata file');
+    #}
 
-    unless (-s $args{'metadata'}) {
+    if ($args{'metadata'} && ! -s $args{'metadata'}) {
         pod2usage("Bad metadata file ($args{'metadata'})");
     }
 
