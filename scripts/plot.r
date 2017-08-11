@@ -1,4 +1,4 @@
-source("gbmr.r")
+source("gbme.r")
 cwd <- getwd()
 setwd(cwd)
 OUT<-read.table("OUT",header=T)
