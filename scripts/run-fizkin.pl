@@ -98,12 +98,12 @@ run-fizkin - run fizkin
 
 =head1 SYNOPSIS
 
-  run-fizkin -i input-dir -o output-dir
+  run-fizkin -i in_dir -o out_dir
 
 Required arguments:
 
-  --input_dir    Input directory (FASTA)
-  --output_dir   Output directory (FASTA)
+  --in_dir       Input directory (FASTA)
+  --out_dir      Output directory (FASTA)
   --metadata     Meta-data file
 
 Options (defaults in parentheses):
