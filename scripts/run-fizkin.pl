@@ -5,25 +5,8 @@ use warnings;
 use feature 'say';
 use autodie;
 use Fizkin;
-use Algorithm::Numerical::Sample 'sample';
-use Bio::SeqIO;
-use Data::Dump 'dump';
-use File::Basename qw'dirname basename';
-use File::Copy;
-use File::Find::Rule;
-use File::Path 'make_path';
-use File::RandomLine;
-use File::Spec::Functions;
-use File::Temp 'tempfile';
 use Getopt::Long;
-use List::MoreUtils qw'uniq';
-use List::Util 'max';
-use Math::Combinatorics 'combine';
 use Pod::Usage;
-use Readonly;
-use Statistics::Descriptive::Discrete;
-use Time::HiRes qw( gettimeofday tv_interval );
-use Time::Interval qw( parseInterval );
 
 $| = 1;
 
