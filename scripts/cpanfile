@@ -6,5 +6,4 @@ requires 'File::Find::Rule';
 requires 'File::RandomLine';
 requires 'Math::Combinatorics';
 requires 'Statistics::Descriptive::Discrete';
-requires 'Template';
 requires 'Time::Interval';
