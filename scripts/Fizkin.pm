@@ -579,43 +579,17 @@ sub subset_files {
             -file   => $file_path,
             -format => 'Fasta',
         );
-        my $count = 0;
+
+        my $out = Bio::SeqIO->new( 
+            -file => ">$subset_file",
+            -format => 'Fasta', 
+        );
+
+        my $taken = 0;
         while (my $seq = $fa->next_seq) {
-            $count++;
-            say $tmp_fh $seq->id;
+            $out->write_seq($seq); 
+            last if ++$taken > $max_seqs;
         }
-        close $tmp_fh;
-
-        print "$count seqs, ";
-        my $timer = timer_calc();
-
-        if ($count < $max_seqs) {
-            print "copying to subset file";
-            copy($file_path, $subset_file); 
-        }
-        else {
-            print "randomly sampling";
-
-            my $in = Bio::SeqIO->new(
-                -file => $file_path,
-                -format => 'Fasta', 
-            );
-
-            my $out= Bio::SeqIO->new( 
-                -file => ">$subset_file",
-                -format => 'Fasta', 
-            );
-
-            my $taken = 0;
-            while (my $seq = $in->next_seq) {
-                $out->write_seq($seq); 
-                last if ++$taken > $max_seqs;
-            }
-        }
-
-        say ", finished in ", $timer->();
-
-        unlink($tmp_filename);
     }
 
     return 1;
