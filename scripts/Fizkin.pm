@@ -571,21 +571,23 @@ sub subset_files {
         printf "%5d: %-${longest}s: %s\n", 
             ++$file_num, $basename, $exists ? 'skipping' : 'sampling';
 
-        my ($tmp_fh, $tmp_filename) = tempfile();
-        my $fa = Bio::SeqIO->new(
-            -file   => $file_path,
-            -format => 'Fasta',
-        );
+        unless ($exists) {
+            my ($tmp_fh, $tmp_filename) = tempfile();
+            my $fa = Bio::SeqIO->new(
+                -file   => $file_path,
+                -format => 'Fasta',
+            );
 
-        my $out = Bio::SeqIO->new( 
-            -file => ">$subset_file",
-            -format => 'Fasta', 
-        );
+            my $out = Bio::SeqIO->new( 
+                -file => ">$subset_file",
+                -format => 'Fasta', 
+            );
 
-        my $taken = 0;
-        while (my $seq = $fa->next_seq) {
-            $out->write_seq($seq); 
-            last if ++$taken > $max_seqs;
+            my $taken = 0;
+            while (my $seq = $fa->next_seq) {
+                $out->write_seq($seq); 
+                last if ++$taken > $max_seqs;
+            }
         }
     }
 
