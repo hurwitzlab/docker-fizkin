@@ -566,13 +566,10 @@ sub subset_files {
         my $basename    = basename($file);
         my $file_path   = catfile($in_dir, $file);
         my $subset_file = catfile($subset_dir, $basename);
+        my $exists      = -e $subset_file;
 
-        printf "%5d: %-${longest}s ", ++$file_num, $basename;
-
-        if (-e $subset_file) {
-            say "subset file exists";
-            next FILE;
-        }
+        printf "%5d: %-${longest}s: %s\n", 
+            ++$file_num, $basename, $exists ? 'skipping' : 'sampling';
 
         my ($tmp_fh, $tmp_filename) = tempfile();
         my $fa = Bio::SeqIO->new(
