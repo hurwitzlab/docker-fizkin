@@ -28,7 +28,6 @@ use File::Basename qw'dirname basename';
 use File::Copy;
 use File::Find::Rule;
 use File::Path 'make_path';
-use File::RandomLine;
 use File::Spec::Functions qw'catfile catdir file_name_is_absolute';
 use File::Temp qw'tempdir tempfile';
 use File::Which 'which';
@@ -597,17 +596,6 @@ sub subset_files {
         else {
             print "randomly sampling";
 
-            my $random = File::RandomLine->new(
-                $tmp_filename, 
-                { algorithm => 'uniform' }
-            ); 
-
-            my %take;
-            while (scalar(keys %take) < $max_seqs) {
-                my $id = $random->next;
-                $take{ $id }++;
-            }
-
             my $in = Bio::SeqIO->new(
                 -file => $file_path,
                 -format => 'Fasta', 
@@ -618,8 +606,10 @@ sub subset_files {
                 -format => 'Fasta', 
             );
 
+            my $taken = 0;
             while (my $seq = $in->next_seq) {
-                $out->write_seq($seq) if exists $take{ $seq->id };
+                $out->write_seq($seq); 
+                last if ++$taken > $max_seqs;
             }
         }
 

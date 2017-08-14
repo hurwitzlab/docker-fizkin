@@ -2,7 +2,6 @@ requires 'Algorithm::Numerical::Sample';
 requires 'Bio::Perl';
 requires 'Data::Dump';
 requires 'File::Find::Rule';
-requires 'File::RandomLine';
 requires 'File::Which';
 requires 'Math::Combinatorics';
 requires 'Statistics::Descriptive::Discrete';
