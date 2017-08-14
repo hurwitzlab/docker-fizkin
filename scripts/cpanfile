@@ -1,9 +1,10 @@
 requires 'Algorithm::Numerical::Sample';
-requires 'Text::RecordParser';
 requires 'Bio::Perl';
 requires 'Data::Dump';
 requires 'File::Find::Rule';
 requires 'File::RandomLine';
+requires 'File::Which';
 requires 'Math::Combinatorics';
 requires 'Statistics::Descriptive::Discrete';
+requires 'Text::RecordParser';
 requires 'Time::Interval';

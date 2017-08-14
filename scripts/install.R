@@ -1,5 +1,8 @@
 #!/usr/bin/env Rscript
 
+install.packages("curl")
+install.packages("openssl")
+install.packages("devtools")
 install.packages("optparse")
 install.packages("plyr")
 install.packages("ggplot2")

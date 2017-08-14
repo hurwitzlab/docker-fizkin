@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use feature 'say';
 use autodie;
+use Cwd 'cwd';
 use Fizkin;
 use Getopt::Long;
 use Pod::Usage;
@@ -62,6 +63,7 @@ sub get_args {
         mode_min    => 1,    
         num_threads => 12,
         metadata    => '',
+        scripts_dir => cwd(),
     );
 
     GetOptions(

@@ -75,6 +75,10 @@ sub run {
         die "Bad input dir ($args->{'in_dir'})";
     }
 
+    unless ($args->{'scripts_dir'}) {
+        die "No scripts_dir";
+    }
+
     unless (-d $args->{'scripts_dir'}) {
         die "Bad scripts dir ($args->{'scripts_dir'})";
     }
