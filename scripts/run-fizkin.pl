@@ -4,7 +4,6 @@ use strict;
 use warnings;
 use feature 'say';
 use autodie;
-use Cwd 'abs_path';
 use FindBin '$Bin';
 use Fizkin;
 use Getopt::Long;

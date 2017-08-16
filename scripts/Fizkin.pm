@@ -747,12 +747,12 @@ sub sna {
         push @meta, $matrix_file if $matrix_file;
     }
 
-    my $sna_r  = catfile($scripts_dir, 'sna.r');
-    my $plot_r = catfile($scripts_dir, 'plot.r');
+    my $sna_r = catfile($scripts_dir, 'sna.r');
+    my $viz_r = catfile($scripts_dir, 'viz.r');
 
     # make sure you load R if you run this on the HPC
     sys_exec("$r_bin $sna_r -f $seq_matrix -o $out_dir -s sna -n $iters");
-    sys_exec("$r_bin $plot_r");
+    sys_exec("$r_bin $viz_r");
 }
 
 # --------------------------------------------------
