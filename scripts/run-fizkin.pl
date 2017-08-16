@@ -4,7 +4,8 @@ use strict;
 use warnings;
 use feature 'say';
 use autodie;
-use Cwd 'cwd';
+use Cwd 'abs_path';
+use FindBin '$Bin';
 use Fizkin;
 use Getopt::Long;
 use Pod::Usage;
@@ -63,7 +64,7 @@ sub get_args {
         mode_min    => 1,    
         num_threads => 12,
         metadata    => '',
-        scripts_dir => cwd(),
+        scripts_dir => $Bin,
     );
 
     GetOptions(
@@ -118,6 +119,7 @@ Options (defaults in parentheses):
   --max_samples  Maximum number of samples (15)
   --files        Comma-separated list of input files
                  (random subset of --max_samples from --input_dir)
+  --scripts_dir  The directory to find the other (R) scripts
 
   --debug        Print extra things
   --help         Show brief help and exit
