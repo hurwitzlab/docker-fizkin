@@ -748,11 +748,12 @@ sub sna {
     }
 
     my $sna_r = catfile($scripts_dir, 'sna.r');
-    my $viz_r = catfile($scripts_dir, 'viz.r');
-
-    # make sure you load R if you run this on the HPC
-    sys_exec("$r_bin $sna_r -f $seq_matrix -o $out_dir -n $iters");
-    sys_exec("$r_bin $viz_r -f $seq_matrix -o $out_dir/sna");
+    if (-e $sna_r) {
+        sys_exec("$r_bin $sna_r -f $seq_matrix -o $out_dir -n $iters");
+    }
+    else {
+        print "Can't find '$sna_r' script. Maybe set --scripts_dir?";
+    }
 }
 
 # --------------------------------------------------
