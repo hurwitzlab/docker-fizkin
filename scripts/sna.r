@@ -3,8 +3,12 @@
 #
 # Runs the social network analysis using Peter Hoff's GBME
 #
+library("hash")
+library("igraph")
+library("networkD3")
 library("optparse")
 library("R.utils")
+library("vegan")
 library("xtable")
 
 cargs = commandArgs(trailingOnly = FALSE)
@@ -237,5 +241,22 @@ if (k == 2) {
   text(Z.pm[,1],Z.pm[,2], cex = 0.3, labels = labels)   
   dev.off()
 }
+
+# dendrogram
+dist = read.table(matrix_file)
+png(file.path(out_dir, 'dendrogram.png'), width=max(300, ncol(dist) * 20))
+hc = hclust(as.dist(as.matrix(dist)))
+plot(hc, xlab="Samples", main="Distances")
+dev.off()
+
+# heatmap
+png(file.path(out_dir, 'heatmap.png'))
+heatmap(as.matrix(dist))
+dev.off()
+
+# vegan tree
+png(file.path(out_dir, 'vegan-tree.png'))
+tree = spantree(as.dist(as.matrix(dist)))
+plot(tree, type="t")
 
 printf("Done\n")
