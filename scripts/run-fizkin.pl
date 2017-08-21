@@ -4,9 +4,11 @@ use strict;
 use warnings;
 use feature 'say';
 use autodie;
+use Cwd 'cwd';
 use FindBin '$Bin';
 use Fizkin;
 use Getopt::Long;
+use File::Spec::Functions 'catdir';
 use Pod::Usage;
 
 $| = 1;
@@ -64,16 +66,17 @@ sub get_args {
         num_threads => 12,
         metadata    => '',
         scripts_dir => $Bin,
+        out_dir     => catdir(cwd(), "out"),
     );
 
     GetOptions(
         \%args,
-        'in_dir=s',
-        'out_dir=s',
+        'in_dir|i=s',
+        'out_dir|o=s',
         'debug',
-        'files:s',
+        'files|f:s',
         'hash_size:s',
-        'kmer_size:i',
+        'kmer_size|k:i',
         'max_samples:i',
         'max_seqs:i',
         'metadata:s',
