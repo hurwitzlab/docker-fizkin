@@ -32,6 +32,11 @@ sub main {
     my $p    = Text::RecordParser::Tab->new($in_file);
     my @flds = grep { /\.(c|d|ll)$/ } $p->field_list;
 
+    unless (@flds) {
+        say qq[Meta file "$in_file" has no fields ending in "c|d|ll."];
+        exit(1);
+    }
+
     my %fhs;
     for my $fld (@flds) {
         open $fhs{ $fld }, '>', catfile($out_dir, $fld);
@@ -39,6 +44,7 @@ sub main {
         say { $fhs{ $fld } } join "\t", 'Sample', split(/_/, $base);
     }
 
+    my $i = 0;
     REC:
     while (my $rec = $p->fetchrow_hashref) {
         my $sample_name = $rec->{'name'};
@@ -50,9 +56,11 @@ sub main {
             say {$fhs{$fld}}
                 join "\t", $sample_name, split(/\s*,\s*/, $rec->{ $fld });
         }
+        $i++;
     }
 
-    say "OK";
+    printf "Exported %s records to %s meta files in %s\n",
+        $i, scalar keys %fhs, $out_dir;
 }
 
 # --------------------------------------------------
