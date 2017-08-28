@@ -1,4 +1,5 @@
 requires 'List::MoreUtils';
+requires 'List::MoreUtils::XS';
 requires 'Text::RecordParser';
 requires 'Algorithm::Numerical::Sample';
 requires 'Bio::Perl';
